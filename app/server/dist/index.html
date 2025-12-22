@@ -6,9 +6,41 @@
   <!-- <link rel="icon" type="image/svg+xml" href="/vite.svg" /> -->
   <meta name="viewport"
     content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>文本编辑器</title>
+  <title>万能编辑器</title>
   <script type="module" crossorigin src="/cgi/ThirdParty/all.editor/api.cgi?_api=read&path=/var/apps/all.editor/target/server/dist/assets/index-BXQQ80_P.js"></script>
   <link rel="stylesheet" crossorigin href="/cgi/ThirdParty/all.editor/api.cgi?_api=read&path=/var/apps/all.editor/target/server/dist/assets/index-LYhUP2Ly.css">
+  
+  <!-- PDF.js库 -->
+  <script src="/cgi/ThirdParty/all.editor/api.cgi?_api=read&path=/var/apps/all.editor/target/server/dist/assets/pdf.min.js"></script>
+  
+  <!-- 手机模式样式 -->
+  <style>
+    @media (max-width: 768px) {
+      #desktopPageInfo {
+        display: none !important;
+      }
+      #mobilePageInfo {
+        display: block !important;
+      }
+    }
+    
+    /* 手机模式悬浮球样式 */
+    #mobilePageInfo {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      z-index: 1000;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    }
+  </style>
 </head>
 
 <body>
@@ -29,11 +61,21 @@
     <!-- 下方左右分栏区域 -->
     <div class="flex-1 flex" style="overflow: hidden;">
       <!-- 左侧文件管理器 - 去掉标题和面包屑 -->
-      <div id="fileManagerSidebar" class="bg-white dark:bg-gray-800 shadow-xl border-r border-gray-200 dark:border-gray-700 flex flex-col" style="width: 256px; min-width: 256px; transition: width 0.3s ease;">
+      <div id="fileManagerSidebar" class="bg-white dark:bg-gray-800 shadow-xl border-r border-gray-200 dark:border-gray-700 flex flex-col" style="width: 256px; min-width: 256px; transition: width 0.3s ease; position: relative;">
         <!-- 文件列表显示区域 -->
         <div class="flex-1 overflow-auto p-4 space-y-2">
           <div id="fileList"></div>
         </div>
+        
+        <!-- 隐藏文件管理器按钮 -->
+    <div id="hideFileManagerBtn" class="absolute right-0 top-1/2 transform -translate-y-1/2 bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 flex items-center justify-center cursor-pointer transition-colors z-50" style="width: 26px; height: 70px; border-radius: 13px 0 0 13px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); opacity: 0.5; background-color: rgba(209, 213, 219, 0.7);">
+          <span class="text-gray-700 dark:text-gray-300 text-lg font-bold">‹</span>
+        </div>
+      </div>
+      
+      <!-- 显示文件管理器按钮（初始隐藏） -->
+    <div id="showFileManagerBtn" class="bg-gray-300 dark:bg-gray-600 hover:bg-gray-400 dark:hover:bg-gray-500 flex items-center justify-center cursor-pointer transition-colors shadow-lg" style="display: none; width: 26px; height: 70px; border-radius: 0 13px 13px 0; position: fixed; left: 0; top: 50%; transform: translateY(-50%); z-index: 9999; opacity: 0.5; background-color: rgba(209, 213, 219, 0.7);">        
+         <span class="text-gray-700 dark:text-gray-300 text-lg font-bold">›</span>
       </div>
       
       <!-- 右侧文本编辑器 -->
@@ -50,6 +92,15 @@ class FileManager {
     this.currentPath = '/';
     this.fileList = [];
     this.config = null;
+    
+    // 文件选择相关属性
+    this.selectedFiles = new Set(); // 存储选中的文件路径
+    this.onFileSelected = null; // 选择变化回调函数
+    this.pendingFileToSelect = null; // 待选中的文件路径（从URL参数获取）
+    
+    // 文件管理器显示状态
+    this.isFileManagerVisible = true;
+    
     // 使用前端访问的协议和端口调用API，适配HTTPS和无端口域名
     const protocol = window.location.protocol; // http: 或 https:
     const host = window.location.hostname;     // 域名，不包含端口
@@ -76,6 +127,102 @@ class FileManager {
     window.addEventListener('resize', () => {
       this.adjustFileManagerWidth();
     });
+    
+    // 添加键盘快捷键监听
+    document.addEventListener('keydown', (e) => {
+      this.handleKeyboardShortcuts(e);
+    });
+  }
+
+  // 绑定事件
+  bindEvents() {
+    // 绑定隐藏文件管理器按钮事件
+    const hideBtn = document.getElementById('hideFileManagerBtn');
+    if (hideBtn) {
+      hideBtn.addEventListener('click', () => {
+        this.hideFileManager();
+      });
+      
+      // 悬停效果
+      hideBtn.addEventListener('mouseenter', () => {
+        hideBtn.style.opacity = '1';
+      });
+      hideBtn.addEventListener('mouseleave', () => {
+        hideBtn.style.opacity = '0.5';
+      });
+    }
+
+    // 绑定显示文件管理器按钮事件
+    const showBtn = document.getElementById('showFileManagerBtn');
+    if (showBtn) {
+      showBtn.addEventListener('click', () => {
+        this.showFileManager();
+      });
+      
+      // 悬停效果
+      showBtn.addEventListener('mouseenter', () => {
+        showBtn.style.opacity = '1';
+      });
+      showBtn.addEventListener('mouseleave', () => {
+        showBtn.style.opacity = '0.5';
+      });
+    }
+  }
+
+  // 隐藏文件管理器
+  hideFileManager() {
+    const fileManagerSidebar = document.getElementById('fileManagerSidebar');
+    const showBtn = document.getElementById('showFileManagerBtn');
+    const mainLayout = document.getElementById('mainLayout');
+    const editorContainer = document.getElementById('editorContainer');
+    
+    // 先隐藏滚动条，防止闪烁
+    mainLayout.style.overflow = 'hidden';
+    editorContainer.style.overflow = 'hidden';
+    
+    fileManagerSidebar.style.width = '0px';
+    fileManagerSidebar.style.minWidth = '0px';
+    fileManagerSidebar.style.overflow = 'hidden';
+    
+    showBtn.style.display = 'flex';
+    this.isFileManagerVisible = false;
+    
+    // 延迟恢复滚动条，避免隐藏过程中的闪烁
+    setTimeout(() => {
+      mainLayout.style.overflow = 'hidden'; // 保持hidden，避免整体页面滚动
+      editorContainer.style.overflow = 'auto'; // 恢复编辑器区域的滚动
+    }, 150);
+    
+    console.log('📁 文件管理器已隐藏');
+  }
+
+  // 显示文件管理器
+  showFileManager() {
+    const fileManagerSidebar = document.getElementById('fileManagerSidebar');
+    const showBtn = document.getElementById('showFileManagerBtn');
+    
+    fileManagerSidebar.style.width = '256px';
+    fileManagerSidebar.style.minWidth = '256px';
+    fileManagerSidebar.style.overflow = '';
+    
+    showBtn.style.display = 'none';
+    this.isFileManagerVisible = true;
+    
+    // 重新调整宽度
+    setTimeout(() => {
+      this.adjustFileManagerWidth();
+    }, 300);
+    
+    console.log('📁 文件管理器已显示');
+  }
+
+  // 切换文件管理器显示状态
+  toggleFileManager() {
+    if (this.isFileManagerVisible) {
+      this.hideFileManager();
+    } else {
+      this.showFileManager();
+    }
   }
 
   // 加载配置文件
@@ -173,9 +320,13 @@ class FileManager {
       
       // 判断路径类型
       if (this.isFilePath(decodedPath)) {
-        // 如果是文件，显示其所在目录
+        // 如果是文件，显示其所在目录，并保存待选中的文件路径
         const directoryPath = this.getParentDirectory(decodedPath);
         console.log('🔗 检测到文件，显示上级目录:', directoryPath);
+        
+        // 保存待选中的文件路径
+        this.pendingFileToSelect = decodedPath;
+        console.log('🔗 待选中的文件:', this.pendingFileToSelect);
         
         // 先检查路径是否有效，避免"这不是个目录"错误
         if (this.isValidDirectoryPath(directoryPath)) {
@@ -271,10 +422,6 @@ class FileManager {
     return true;
   }
 
-  bindEvents() {
-    // 无需绑定关闭按钮和模态框事件（已改为固定布局）
-  }
-
   // 清除欢迎界面
   clearWelcomeScreen() {
     const editorContainer = document.getElementById('app');
@@ -340,6 +487,9 @@ class FileManager {
         
         console.log('📁 加载根目录 (默认路径):', this.fileList);
         this.renderFileList();
+        
+        // 检查是否有待选中的文件
+        this.checkPendingFileSelection();
         return;
       }
 
@@ -381,6 +531,9 @@ class FileManager {
       console.log('✅ 处理完成:', this.fileList);
       this.renderFileList();
 
+      // 检查是否有待选中的文件
+      this.checkPendingFileSelection();
+
       // 延迟调整宽度，确保DOM完全渲染
       setTimeout(() => {
         this.adjustFileManagerWidth();
@@ -404,6 +557,30 @@ class FileManager {
     }
   }
 
+  // 检查并处理待选中的文件
+  checkPendingFileSelection() {
+    if (this.pendingFileToSelect) {
+      console.log('🔍 检查待选中的文件:', this.pendingFileToSelect);
+      
+      // 查找匹配的文件
+      const fileToSelect = this.fileList.find(file => {
+        const filePath = file.path || file.displayPath || this.currentPath + '/' + file.name;
+        return filePath === this.pendingFileToSelect;
+      });
+      
+      if (fileToSelect && !fileToSelect.disabled) {
+        console.log('✅ 找到待选中的文件，自动选择:', fileToSelect.name);
+        const filePath = fileToSelect.path || fileToSelect.displayPath || this.currentPath + '/' + fileToSelect.name;
+        this.selectSingleFile(filePath);
+      } else {
+        console.log('⚠️ 未找到待选中的文件或文件已禁用');
+      }
+      
+      // 清除待选中的文件标记
+      this.pendingFileToSelect = null;
+    }
+  }
+
 updateBreadcrumb() {
   const breadcrumb = document.getElementById('breadcrumb');
   breadcrumb.innerHTML = '';
@@ -422,7 +599,9 @@ updateBreadcrumb() {
   const breadcrumbContent = document.createElement('div');
   breadcrumbContent.style.display = 'flex';
   breadcrumbContent.style.alignItems = 'center';
-  breadcrumbContent.style.flexWrap = 'wrap';
+  breadcrumbContent.style.flexWrap = 'nowrap'; // 确保不换行
+  breadcrumbContent.style.whiteSpace = 'nowrap'; // 防止换行
+  breadcrumbContent.style.overflow = 'hidden'; // 隐藏超出部分
   breadcrumbContent.style.gap = '4px';
   breadcrumbContent.style.zIndex = '11'; // 高于输入框
   breadcrumbContent.style.position = 'relative';
@@ -438,7 +617,50 @@ updateBreadcrumb() {
   if (this.currentPath !== '/') {
     const pathParts = this.currentPath.split('/').filter(part => part);
 
-    pathParts.forEach((part, index) => {
+    // 手机模式下，如果路径过长，显示省略号和最后两级
+if (this.isMobileDevice() && pathParts.length > 3) {
+  // 显示省略号
+  const ellipsis = document.createElement('span');
+  ellipsis.className = 'text-xs text-gray-400 mx-1';
+  ellipsis.textContent = '.../';
+  breadcrumbContent.appendChild(ellipsis);
+
+  // 显示倒数第二级
+  const secondLastIndex = pathParts.length - 2;
+  const secondLastPart = pathParts[secondLastIndex];
+  const secondLastSpan = document.createElement('span');
+  secondLastSpan.className = 'cursor-pointer hover:text-blue-600';
+  secondLastSpan.textContent = secondLastPart;
+  const secondLastPath = '/' + pathParts.slice(0, secondLastIndex + 1).join('/');
+  secondLastSpan.onclick = (e) => {
+    e.stopPropagation();
+    console.log('点击面包屑导航:', secondLastPath);
+    this.navigate(secondLastPath);
+  };
+  breadcrumbContent.appendChild(secondLastSpan);
+
+  // 分隔符
+  const separator = document.createElement('span');
+  separator.className = 'text-xs text-gray-400 mx-1';
+  separator.textContent = '/';
+  breadcrumbContent.appendChild(separator);
+
+  // 显示最后一级
+  const lastIndex = pathParts.length - 1;
+  const lastPart = pathParts[lastIndex];
+  const lastSpan = document.createElement('span');
+  lastSpan.className = 'cursor-pointer hover:text-blue-600';
+  // 如果最后一级文件夹名过长，显示前面15个字符后面用省略号代替
+  lastSpan.textContent = lastPart.length > 15 ? lastPart.substring(0, 15) + '...' : lastPart;
+  const lastPath = '/' + pathParts.slice(0, lastIndex + 1).join('/');
+  lastSpan.onclick = (e) => {
+    e.stopPropagation();
+    console.log('点击面包屑导航:', lastPath);
+    this.navigate(lastPath);
+  };
+  breadcrumbContent.appendChild(lastSpan);
+} else {
+  pathParts.forEach((part, index) => {
       // 分隔符
       const separator = document.createElement('span');
       separator.className = 'text-xs text-gray-400 mx-1';
@@ -459,6 +681,8 @@ updateBreadcrumb() {
       breadcrumbContent.appendChild(dirSpan);
     });
   }
+}
+    
 
   // 可编辑的路径输入框
   const input = document.createElement('input');
@@ -572,9 +796,14 @@ navigateToPath(path) {
     this.fileList.forEach(file => {
       const div = document.createElement('div');
       const isDisabled = file.disabled;
+      const filePath = file.path || file.displayPath || this.currentPath + '/' + file.name;
+      const isSelected = this.selectedFiles.has(filePath);
+      
       div.className = `flex items-center space-x-3 p-3 rounded-lg cursor-pointer transition-colors ${
         isDisabled
           ? 'opacity-50 cursor-not-allowed'
+          : isSelected
+          ? '!bg-blue-100 !dark:bg-blue-900 !border !border-blue-300 !dark:border-blue-700'
           : 'hover:bg-gray-100 dark:hover:bg-gray-700'
       }`;
 
@@ -583,19 +812,38 @@ navigateToPath(path) {
       div.innerHTML = `
         <span class="text-lg flex-shrink-0">${icon}</span>
         <div class="flex-1 min-w-0">
-          <div class="font-medium break-all">${file.name}</div>
+          <div class="font-medium break-all ${isSelected ? 'text-blue-600 dark:text-blue-400' : ''}">${file.name}</div>
+
         </div>
       `;
 
       if (!isDisabled) {
-        div.onclick = () => {
-          if (file.type === 'folder') {
-            // 使用文件的显示路径进行导航
-            this.navigate(file.displayPath || file.path);
+        div.onclick = (e) => {
+          if (e.ctrlKey || e.metaKey) {
+            // 多选模式
+            this.toggleFileSelection(filePath);
           } else {
-            this.openFile(file);
+            // 单选模式
+            this.selectSingleFile(filePath);
+            
+            if (file.type === 'folder') {
+              // 使用文件的显示路径进行导航
+              this.navigate(file.displayPath || file.path);
+            } else {
+              this.openFile(file);
+            }
           }
         };
+      }
+
+      // 使用内联样式确保选择状态的背景优先级
+      if (isSelected) {
+        div.style.backgroundColor = 'rgb(219 234 254)'; // bg-blue-100
+        div.style.border = '1px solid rgb(147 197 253)'; // border-blue-300
+        div.style.borderRadius = '8px'; // rounded-lg
+      } else if (!isDisabled) {
+        div.style.backgroundColor = '';
+        div.style.border = '';
       }
 
       fileListEl.appendChild(div);
@@ -605,10 +853,89 @@ navigateToPath(path) {
     this.adjustFileManagerWidth();
   }
 
+  // 处理键盘快捷键
+  handleKeyboardShortcuts(e) {
+    // Ctrl+A: 选择所有文件
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !e.shiftKey) {
+      e.preventDefault();
+      this.selectAllFiles();
+    }
+    
+    // Ctrl+D: 取消选择所有文件
+    if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+      e.preventDefault();
+      this.deselectAllFiles();
+    }
+    
+    // Ctrl+/: 切换文件管理器显示状态
+    if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+      e.preventDefault();
+      this.toggleFileManager();
+    }
+  }
+
+  // 选择单个文件
+  selectSingleFile(filePath) {
+    this.selectedFiles.clear();
+    this.selectedFiles.add(filePath);
+    this.updateSelectionState();
+  }
+
+  // 切换文件选择状态（多选模式）
+  toggleFileSelection(filePath) {
+    if (this.selectedFiles.has(filePath)) {
+      this.selectedFiles.delete(filePath);
+    } else {
+      this.selectedFiles.add(filePath);
+    }
+    this.updateSelectionState();
+  }
+
+  // 选择所有文件
+  selectAllFiles() {
+    this.selectedFiles.clear();
+    this.fileList.forEach(file => {
+      if (!file.disabled) {
+        const filePath = file.path || file.displayPath || this.currentPath + '/' + file.name;
+        this.selectedFiles.add(filePath);
+      }
+    });
+    this.updateSelectionState();
+  }
+
+  // 取消选择所有文件
+  deselectAllFiles() {
+    this.selectedFiles.clear();
+    this.updateSelectionState();
+  }
+
+  // 更新选择状态
+  updateSelectionState() {
+    // 重新渲染文件列表以反映选择状态
+    this.renderFileList();
+    
+    // 触发选择变化回调
+    if (this.onFileSelected) {
+      this.onFileSelected(Array.from(this.selectedFiles));
+    }
+    
+    console.log('📋 当前选中的文件:', Array.from(this.selectedFiles));
+  }
+
+  // 获取选中的文件列表
+  getSelectedFiles() {
+    return Array.from(this.selectedFiles);
+  }
+
   // 动态调整文件管理器宽度
   adjustFileManagerWidth() {
     const fileManagerSidebar = document.getElementById('fileManagerSidebar');
     const fileListEl = document.getElementById('fileList');
+    
+    // 如果文件管理器是隐藏状态，不调整宽度
+    if (!this.isFileManagerVisible) {
+      return;
+    }
     
     // 计算最长的文件名所需的宽度
     let maxWidth = 256; // 默认最小宽度
@@ -681,6 +1008,13 @@ navigateToPath(path) {
     return imageExtensions.some(ext => lowerFileName.endsWith(ext));
   }
 
+  // 判断是否为PDF文件
+  isPdfFile(fileName) {
+    const pdfExtensions = ['.pdf', '.PDF'];
+    const lowerFileName = fileName.toLowerCase();
+    return pdfExtensions.some(ext => lowerFileName.endsWith(ext));
+  }
+
   // 点击文件时处理
   async openFile(file) {
     try {
@@ -694,7 +1028,12 @@ navigateToPath(path) {
       // 检查是否为图片文件
       if (this.isImageFile(file.name)) {
         this.displayImage({...file, path: filePath});
-      } else {
+      } 
+      // 检查是否为PDF文件
+      else if (this.isPdfFile(file.name)) {
+        await this.displayPdf({...file, path: filePath});
+      } 
+      else {
         // 跳转到文本编辑器URL
         this.redirectToTextEditor(filePath);
       }
@@ -731,23 +1070,376 @@ navigateToPath(path) {
     `;
   }
 
+  // 检测是否为手机模式
+  isMobileDevice() {
+    return window.innerWidth <= 768 || /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  }
+
+  // 获取默认缩放比例（手机模式75%，桌面模式100%）
+  getDefaultScale() {
+    return this.isMobileDevice() ? 0.75 : 1.0;
+  }
+
+  // 显示PDF文件（使用pdf.js实现）
+  async displayPdf(file) {
+    const editorContainer = document.getElementById('app');
+    
+    // 移除开头的斜杠，构建API路径
+    const cleanPath = file.path.startsWith('/') ? file.path.substring(1) : file.path;
+    
+    // 构建PDF文件的URL
+    const pdfUrl = `${this.apiBaseUrl}?_api=read&path=/${cleanPath}`;
+    
+    console.log('📚 显示PDF:', pdfUrl);
+    console.log(`📱 设备检测: ${this.isMobileDevice() ? '手机模式' : '桌面模式'}`);
+    
+    // 初始化PDF状态
+    this.pdfState = {
+      currentPage: 1,
+      currentScale: this.getDefaultScale(), // 根据设备类型设置默认缩放
+      totalPages: 0,
+      isRendering: false,
+      pdfDoc: null,
+      fileName: file.name,
+      pdfUrl: pdfUrl,
+      renderedPages: new Set(), // 已渲染的页面
+      pageElements: [] // 页面元素数组
+    };
+    
+    // 创建PDF查看器界面
+    editorContainer.innerHTML = `
+      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; background-color: #f8f9fa; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;">
+        
+        <!-- PDF工具栏 -->
+        <div style="background: white; border-bottom: 1px solid #e5e5e5; padding: 12px 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: space-between; position: relative;">
+          
+          <!-- 左侧控制按钮 -->
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <span style="font-weight: 600; color: #333; font-size: 14px; margin-right: 10px;">${file.name}</span>
+          </div>
+          
+          <!-- 中间页面信息 - 绝对定位到工具栏中央（桌面模式显示） -->
+          <div id="desktopPageInfo" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: block;">
+            <span style="margin: 0 8px; color: #666; font-size: 14px; white-space: nowrap;">页面 1/1</span>
+          </div>
+          
+          <!-- 右侧控制按钮 -->
+          <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+            <button id="zoomOut" style="padding: 6px 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background-color 0.2s;" disabled>
+              缩小
+            </button>
+            
+            <button id="zoomIn" style="padding: 6px 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background-color 0.2s;" disabled>
+              放大
+            </button>
+            
+            <button id="resetZoom" style="padding: 6px 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: background-color 0.2s;" disabled>
+              100%
+            </button>
+            
+            <a href="${pdfUrl}" download="${file.name}" style="padding: 6px 12px; background: #28a745; color: white; border-radius: 4px; text-decoration: none; font-size: 14px; transition: background-color 0.2s;">
+              下载
+            </a>
+          </div>
+        </div>
+        
+        <!-- PDF显示区域 -->
+        <div id="pdfContainer" style="flex: 1; overflow: auto; background-color: #f5f5f5; position: relative; scroll-behavior: smooth;">
+          <div id="pdfPages" style="display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 20px;">
+            <div id="loadingMessage" style="color: #666; font-size: 16px; text-align: center; margin: 50px 0;">正在加载PDF...</div>
+          </div>
+          
+          <!-- 手机模式页面信息悬浮球 - 默认隐藏 -->
+          <div id="mobilePageInfo" style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); color: white; padding: 8px 16px; border-radius: 20px; font-size: 14px; z-index: 1000; display: none; backdrop-filter: blur(10px); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+            页面 1/1
+          </div>
+        </div>
+        
+        <!-- 错误信息 -->
+        <div id="errorMessage" style="display: none; padding: 40px; text-align: center; color: #dc3545;">
+          <p style="font-size: 16px; margin-bottom: 20px;">PDF加载失败</p>
+          <a href="${pdfUrl}" download="${file.name}" style="padding: 8px 16px; background: #dc3545; color: white; border-radius: 4px; text-decoration: none;">下载PDF文件</a>
+        </div>
+      </div>
+    `;
+    
+    try {
+      // 配置pdf.js worker
+      if (typeof pdfjsLib !== 'undefined' && pdfjsLib.GlobalWorkerOptions) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/cgi/ThirdParty/all.editor/api.cgi?_api=read&path=/var/apps/all.editor/target/server/dist/assets/pdf.worker.min.js';
+      }
+      
+      // 加载PDF文档
+      const loadingTask = pdfjsLib.getDocument(pdfUrl);
+      const pdf = await loadingTask.promise;
+      
+      this.pdfState.pdfDoc = pdf;
+      this.pdfState.totalPages = pdf.numPages;
+      
+      console.log(`✅ PDF加载成功，共${pdf.numPages}页`);
+      
+      // 启用控制按钮
+      this.enablePdfControls();
+      
+      // 渲染所有页面
+      await this.renderAllPages();
+      
+      // 监听滚动事件更新页面信息
+      this.setupScrollListener();
+      
+      // 更新页面信息
+      this.updatePageInfo();
+      
+    } catch (error) {
+      console.error('💥 PDF加载失败:', error);
+      this.showPdfError();
+    }
+  }
+
+  // 渲染所有PDF页面
+  async renderAllPages() {
+    if (!this.pdfState.pdfDoc) return;
+    
+    const pdfPages = document.getElementById('pdfPages');
+    const loadingMessage = document.getElementById('loadingMessage');
+    
+    // 隐藏加载消息
+    if (loadingMessage) loadingMessage.style.display = 'none';
+    
+    // 清空页面容器
+    pdfPages.innerHTML = '';
+    
+    this.pdfState.pageElements = [];
+    
+    // 逐页渲染
+    for (let pageNum = 1; pageNum <= this.pdfState.totalPages; pageNum++) {
+      try {
+        const pageElement = await this.renderSinglePage(pageNum);
+        if (pageElement) {
+          pdfPages.appendChild(pageElement);
+          this.pdfState.pageElements.push(pageElement);
+        }
+      } catch (error) {
+        console.error(`💥 渲染第${pageNum}页失败:`, error);
+      }
+    }
+  }
+  
+  // 渲染单个PDF页面 - 增强清晰度版本
+  async renderSinglePage(pageNumber) {
+    if (!this.pdfState.pdfDoc) return null;
+    
+    try {
+      const page = await this.pdfState.pdfDoc.getPage(pageNumber);
+      const pageContainer = document.createElement('div');
+      pageContainer.id = `page-${pageNumber}`;
+      pageContainer.className = 'pdf-page';
+      pageContainer.style.marginBottom = '20px';
+      pageContainer.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+      pageContainer.style.backgroundColor = 'white';
+      pageContainer.style.padding = '10px';
+      pageContainer.style.borderRadius = '4px';
+      
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d', { alpha: false });
+      
+      // 获取设备像素比以提高清晰度
+      const devicePixelRatio = window.devicePixelRatio || 1;
+      
+      // 计算缩放后的尺寸
+      const viewport = page.getViewport({ scale: this.pdfState.currentScale });
+      
+      // 设置canvas的实际尺寸（考虑设备像素比）
+      canvas.width = Math.floor(viewport.width * devicePixelRatio);
+      canvas.height = Math.floor(viewport.height * devicePixelRatio);
+      
+      // 设置canvas的显示尺寸（CSS尺寸）
+      canvas.style.width = viewport.width + 'px';
+      canvas.style.height = viewport.height + 'px';
+      
+      // 缩放context以适应高DPI显示
+      context.scale(devicePixelRatio, devicePixelRatio);
+      
+      pageContainer.appendChild(canvas);
+      
+      // 渲染页面
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport
+      };
+      
+      await page.render(renderContext).promise;
+      
+      return pageContainer;
+      
+    } catch (error) {
+      console.error(`💥 渲染第${pageNumber}页失败:`, error);
+      return null;
+    }
+  }
+
+  // 启用PDF控制按钮
+  enablePdfControls() {
+    const buttons = ['zoomOut', 'zoomIn', 'resetZoom'];
+    buttons.forEach(id => {
+      const btn = document.getElementById(id);
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    });
+    
+    // 绑定缩放事件
+    document.getElementById('zoomIn').onclick = () => this.zoomIn();
+    document.getElementById('zoomOut').onclick = () => this.zoomOut();
+    document.getElementById('resetZoom').onclick = () => this.resetZoom();
+  }
+  
+  // 设置滚动监听
+  setupScrollListener() {
+    const pdfContainer = document.getElementById('pdfContainer');
+    let scrollTimeout;
+    
+    pdfContainer.addEventListener('scroll', () => {
+      // 清除之前的定时器
+      clearTimeout(scrollTimeout);
+      
+      // 设置新的定时器，延迟更新页面信息
+      scrollTimeout = setTimeout(() => {
+        this.updateCurrentPage();
+      }, 150);
+    });
+  }
+  
+  // 更新当前可见页面
+  updateCurrentPage() {
+    const pdfContainer = document.getElementById('pdfContainer');
+    const containerTop = pdfContainer.scrollTop;
+    const containerHeight = pdfContainer.clientHeight;
+    
+    let currentPage = 1;
+    
+    // 找到当前可见的页面
+    for (let i = 0; i < this.pdfState.pageElements.length; i++) {
+      const pageElement = this.pdfState.pageElements[i];
+      const pageTop = pageElement.offsetTop;
+      const pageBottom = pageTop + pageElement.offsetHeight;
+      
+      // 统一逻辑：只要页面有任何部分在容器中就认为可见
+      if (i === this.pdfState.pageElements.length - 1) {
+        // 最后一页：只要页面底部到达容器的30%位置就认为可见
+        const thresholdPosition = containerTop + containerHeight * 0.3;
+        if (pageBottom > thresholdPosition) {
+          currentPage = i + 1;
+          break;
+        }
+      } else {
+        // 非最后一页：只要页面有任何部分在容器中就认为可见
+        if (pageBottom > containerTop && pageTop < containerTop + containerHeight) {
+          currentPage = i + 1;
+          break;
+        }
+      }
+    }
+    
+    // 如果滚动到底部，强制设置为最后一页
+if (containerTop + containerHeight >= pdfContainer.scrollHeight - 1) {
+  currentPage = this.pdfState.totalPages;
+}
+this.pdfState.currentPage = currentPage;
+    this.updatePageInfo();
+  }
+
+  // 放大
+  async zoomIn() {
+    if (this.pdfState.currentScale < 3.0) {
+      this.pdfState.currentScale += 0.25;
+      await this.renderAllPages();
+      this.updateZoomButtons();
+      // 缩放后更新当前页面信息
+      setTimeout(() => this.updateCurrentPage(), 100);
+    }
+  }
+
+  // 缩小
+  async zoomOut() {
+    if (this.pdfState.currentScale > 0.5) {
+      this.pdfState.currentScale -= 0.25;
+      await this.renderAllPages();
+      this.updateZoomButtons();
+      // 缩放后更新当前页面信息
+      setTimeout(() => this.updateCurrentPage(), 100);
+    }
+  }
+
+  // 重置缩放
+  async resetZoom() {
+    this.pdfState.currentScale = this.getDefaultScale(); // 根据设备类型重置到默认缩放
+    await this.renderAllPages();
+    this.updateZoomButtons();
+    // 缩放后更新当前页面信息
+    setTimeout(() => this.updateCurrentPage(), 100);
+  }
+
+  // 更新页面信息（同时更新桌面和手机版本）
+  updatePageInfo() {
+    const desktopPageInfo = document.getElementById('desktopPageInfo');
+    const mobilePageInfo = document.getElementById('mobilePageInfo');
+    const pageText = `页面 ${this.pdfState.currentPage}/${this.pdfState.totalPages}`;
+    
+    // 更新桌面版页面信息
+    if (desktopPageInfo) {
+      const span = desktopPageInfo.querySelector('span');
+      if (span) {
+        span.textContent = pageText;
+      }
+    }
+    
+    // 更新手机版页面信息
+    if (mobilePageInfo) {
+      mobilePageInfo.textContent = pageText;
+    }
+  }
+
+  // 更新缩放按钮状态
+  updateZoomButtons() {
+    const zoomInBtn = document.getElementById('zoomIn');
+    const zoomOutBtn = document.getElementById('zoomOut');
+    const resetZoomBtn = document.getElementById('resetZoom');
+    
+    if (zoomInBtn) {
+      zoomInBtn.disabled = this.pdfState.currentScale >= 3.0;
+      zoomInBtn.style.opacity = this.pdfState.currentScale >= 3.0 ? '0.5' : '1';
+    }
+    
+    if (zoomOutBtn) {
+      zoomOutBtn.disabled = this.pdfState.currentScale <= 0.5;
+      zoomOutBtn.style.opacity = this.pdfState.currentScale <= 0.5 ? '0.5' : '1';
+    }
+    
+    if (resetZoomBtn) {
+      resetZoomBtn.textContent = `${Math.round(this.pdfState.currentScale * 100)}%`;
+    }
+  }
+
+  // 显示PDF错误信息
+  showPdfError() {
+    const pdfContainer = document.getElementById('pdfContainer');
+    const errorMessage = document.getElementById('errorMessage');
+    const loadingMessage = document.getElementById('loadingMessage');
+    
+    if (loadingMessage) loadingMessage.style.display = 'none';
+    if (errorMessage) errorMessage.style.display = 'block';
+  }
+
   // 跳转到文本编辑器
   redirectToTextEditor(filePath) {
     // 获取当前地址信息
-    const protocol = window.location.protocol; // http: 或 https:
     const hostname = window.location.hostname;
-    const port = window.location.port;
-      // 构建基础URL
-    let baseUrl;
-    if (port) {
-      baseUrl = `${protocol}//${hostname}:${port}`;
-    } else {
-      baseUrl = `${protocol}//${hostname}`;
-    }
-          
-          
+    const port = window.location.port || '5666'; // 默认5666端口
+    
     // 构建目标URL
-    const targetUrl = `${baseUrl}/cgi/ThirdParty/all.editor/index.cgi?path=${encodeURIComponent(filePath)}`;
+    const targetUrl = `http://${hostname}:${port}/cgi/ThirdParty/all.editor/index.cgi?path=${encodeURIComponent(filePath)}`;
     
     console.log('🔗 跳转到文本编辑器:', targetUrl);
     
@@ -761,6 +1453,12 @@ const fileManager = new FileManager();
 
 // 添加全局方法以便面包屑导航使用
 window.fileManager = fileManager;
+
+// 导出文件选择相关方法供外部使用
+window.getSelectedFiles = () => fileManager.getSelectedFiles();
+window.selectAllFiles = () => fileManager.selectAllFiles();
+window.deselectAllFiles = () => fileManager.deselectAllFiles();
+window.toggleFileManager = () => fileManager.toggleFileManager();
 
   </script>
 </body>
