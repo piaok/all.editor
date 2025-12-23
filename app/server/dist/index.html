@@ -121,7 +121,7 @@ class FileManager {
   async init() {
     this.bindEvents();
     await this.loadConfig();
-    this.loadInitialPathFromURL();
+    await this.loadInitialPathFromURL();
     
     // 监听窗口大小变化，动态调整文件管理器宽度
     window.addEventListener('resize', () => {
@@ -307,7 +307,7 @@ class FileManager {
   }
 
   // 从URL参数中读取初始路径（仅影响文件列表，不影响右侧编辑器）
-  loadInitialPathFromURL() {
+  async loadInitialPathFromURL() {
     const urlParams = new URLSearchParams(window.location.search);
     const pathParam = urlParams.get('path');
     
@@ -320,7 +320,51 @@ class FileManager {
       
       // 判断路径类型
       if (this.isFilePath(decodedPath)) {
-        // 如果是文件，显示其所在目录，并保存待选中的文件路径
+        // 提取文件名
+        const fileName = decodedPath.split('/').pop();
+
+        // 检查文件类型
+        if (this.isImageFile(fileName)) {
+          // 设置当前路径为上级目录
+          const directoryPath = this.getParentDirectory(decodedPath);
+          this.currentPath = directoryPath;
+          this.updateBreadcrumb();
+
+          // 加载上级目录的文件列表
+          if (this.isValidDirectoryPath(directoryPath)) {
+            this.loadFileList(directoryPath);
+          } else {
+            this.loadFileList('/');
+          }
+
+          // 设置待选中的文件
+          this.pendingFileToSelect = decodedPath;
+
+          // 直接显示图片
+          this.displayImage({ name: fileName, path: decodedPath });
+          return;
+        } else if (this.isPdfFile(fileName)) {
+          // 设置当前路径为上级目录
+          const directoryPath = this.getParentDirectory(decodedPath);
+          this.currentPath = directoryPath;
+          this.updateBreadcrumb();
+
+          // 加载上级目录的文件列表
+          if (this.isValidDirectoryPath(directoryPath)) {
+            this.loadFileList(directoryPath);
+          } else {
+            this.loadFileList('/');
+          }
+
+          // 设置待选中的文件
+          this.pendingFileToSelect = decodedPath;
+
+          // 直接显示PDF
+          await this.displayPdf({ name: fileName, path: decodedPath });
+          return;
+        }
+
+        // 如果是其他文件，显示其所在目录，并保存待选中的文件路径
         const directoryPath = this.getParentDirectory(decodedPath);
         console.log('🔗 检测到文件，显示上级目录:', directoryPath);
         
