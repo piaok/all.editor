@@ -110,7 +110,7 @@ class FileManager {
     let apiPort = port;
     if (!apiPort) {
       // 无端口号时，使用协议对应的默认端口
-      apiPort = protocol === 'https:' ? '443' : '5666';
+      apiPort = protocol === 'https:' ? '443' : '80';
     }
     
     // 构建API基础URL，使用与前端相同的协议
@@ -1476,14 +1476,24 @@ this.pdfState.currentPage = currentPage;
     if (errorMessage) errorMessage.style.display = 'block';
   }
 
+
+
+
   // 跳转到文本编辑器
   redirectToTextEditor(filePath) {
     // 获取当前地址信息
-    const hostname = window.location.hostname;
-    const port = window.location.port || '5666'; // 默认5666端口
+    const protocol = window.location.protocol; // http: 或 https:
+    const host = window.location.hostname;     // 域名，不包含端口
+    const port = window.location.port;         // 端口号，HTTPS默认443，HTTP默认80时会返回空字符串
     
+    // 根据协议和端口确定API端口
+    let apiPort = port;
+    if (!apiPort) {
+      // 无端口号时，使用协议对应的默认端口
+      apiPort = protocol === 'https:' ? '443' : '80';
+    }
     // 构建目标URL
-    const targetUrl = `http://${hostname}:${port}/cgi/ThirdParty/all.editor/index.cgi?path=${encodeURIComponent(filePath)}`;
+    const targetUrl = `${protocol}//${host}:${port}/cgi/ThirdParty/all.editor/index.cgi?path=${encodeURIComponent(filePath)}`;
     
     console.log('🔗 跳转到文本编辑器:', targetUrl);
     
