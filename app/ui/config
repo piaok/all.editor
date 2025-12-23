@@ -6,10 +6,22 @@
             "type": "iframe",
             "url": "/cgi/ThirdParty/all.editor/index.cgi",
             "allUsers": false,
+            "control": {
+                "accessPerm": "readonly",
+                "portPerm": "readonly", 
+                "pathPerm": "editable"
+            },              
             "noDisplay": false,
             "fileTypes": [
                 "text",
+                "pdf",
+                "log",
+                "env",
+                "ini",
                 "strm",
+                "png",
+                "jpg",
+                "jpeg",
                 "nfo",
                 "txt",
                 "js",
