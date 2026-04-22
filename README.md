@@ -2,6 +2,7 @@
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
+- 支持预览和编辑office文件，包括doc、docx、xls、xlsx、ppt、ppts，离线编辑器，安全又可靠。
 - 支持预览编辑多种格式文件，配有内置文件管理器、地址栏和面包屑导航，切换编辑文件更直观便捷。
 - text、strm、txt、js、ts、html、htm、css、scss、less、json、md、py、java、c、cpp、cc、cxx、go、rs、php、rb、sh、sql、xml、yaml、yml、vue 后缀文件直接双击文件或右键选择万能编辑器打开。
 - 非上述后缀文件，打开桌面图标，在右侧文件管理器，选中对应文件打开，或者复制系统文件管理器的地址，粘贴到地址栏打开。
