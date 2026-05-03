@@ -1,6 +1,6 @@
 appname=all.editor
 version=2.1.2
-desc=支持预览编辑多种格式文件，配有内置文件管理器、地址栏和面包屑导航。ini、strm、nfo 等后缀文件可直接双击打开，其他文件请通过桌面图标进入内置文件管理器选择打开。
+desc=支持预览编辑多种格式文件，配有内置文件管理器、地址栏和面包屑导航。ini、env、strm、nfo 等后缀文件可直接双击打开，其他文件请通过桌面图标进入内置文件管理器选择打开。
 platform=x86
 display_name=万能编辑器
 maintainer=qilinzhu
@@ -10,4 +10,4 @@ distributor_url=https://space.bilibili.com/351478349?spm_id_from=333.1007.0.0
 source=thirdparty
 desktop_uidir=ui
 desktop_applaunchname=all.editor
-changelog=取消与官方代码编辑器重叠的文件格式关联，仅保留ini、strm、nfo等专属格式
+changelog=取消与官方代码编辑器重叠的文件格式关联，仅保留ini、env、strm、nfo等专属格式

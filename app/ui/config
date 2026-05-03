@@ -15,7 +15,8 @@
             "fileTypes": [
                 "ini",
                 "strm",
-                "nfo"
+                "nfo",
+                "env"
             ]
         }
     }
